@@ -1,5 +1,8 @@
 package com.example.bluetoothextender
 
+import BluetoothUtils
+import android.app.ComponentCaller
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -25,6 +28,22 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     )
                 }
+            }
+        }
+    }
+
+    override fun onActivityResult(
+        requestCode: Int,
+        resultCode: Int,
+        data: Intent?,
+        caller: ComponentCaller
+    ) {
+        super.onActivityResult(requestCode, resultCode, data, caller)
+
+        if (requestCode == BluetoothUtils.RESULT_ENABLE_BT) {
+            when (resultCode) {
+                RESULT_OK -> {} //TODO: bluetooth enabled
+                RESULT_CANCELED -> {} //TODO: Error, tell user to enable bluetooth
             }
         }
     }

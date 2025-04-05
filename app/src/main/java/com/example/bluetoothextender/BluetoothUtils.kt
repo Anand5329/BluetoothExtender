@@ -15,16 +15,17 @@ class BluetoothUtils(val context: Context, val activity: Activity) {
             System.exit(0)
         }
 
-        var RESULT_ENABLE_BT: Int = 0
+
 
         if (bluetoothAdapter?.isEnabled == false) {
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
-            // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() for processing
+            // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
             startActivityForResult(activity, enableBtIntent, RESULT_ENABLE_BT, null)
         }
     }
 
+    companion object {
+        val RESULT_ENABLE_BT: Int = 0
+    }
 }
-
-
