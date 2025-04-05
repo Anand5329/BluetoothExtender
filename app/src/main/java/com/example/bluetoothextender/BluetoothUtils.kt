@@ -1,17 +1,26 @@
 import android.app.Activity
 import android.bluetooth.*
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
+import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentSender
 import androidx.core.app.ActivityCompat.startActivityForResult
+import androidx.core.app.ActivityCompat.startIntentSenderForResult
 import androidx.core.content.ContextCompat.getSystemService
+import java.util.concurrent.Executor
 
 class BluetoothUtils(val context: Context, val activity: Activity) {
 
-    val bluetoothManager: BluetoothManager? = getSystemService(context, BluetoothManager::class.java)
+    val bluetoothManager: BluetoothManager? =
+        getSystemService(context, BluetoothManager::class.java)
     val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.getAdapter()
 
-    public fun setup() {
+    fun ensureBluetoothEnabled() {
         if (bluetoothAdapter == null) {
+            activity.finish()
             System.exit(0)
         }
 
@@ -25,7 +34,39 @@ class BluetoothUtils(val context: Context, val activity: Activity) {
         }
     }
 
+    fun setupCompanionDeviceSearch() {
+        val deviceFilter: BluetoothDeviceFilter = BluetoothDeviceFilter.Builder().build()
+        val pairingRequest: AssociationRequest =
+            AssociationRequest.Builder().addDeviceFilter(deviceFilter).setSingleDevice(true).build()
+
+        val deviceManager: CompanionDeviceManager? =
+            context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
+        deviceManager?.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+            override fun onAssociationPending(intentSender: IntentSender) {
+                startIntentSenderForResult(
+                    activity, intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+                )
+            }
+
+            override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                // association created
+            }
+
+            // before Android 13
+            override fun onDeviceFound(chooseLauncher: IntentSender) {
+                startIntentSenderForResult(
+                    activity, chooseLauncher, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+                )
+            }
+
+            override fun onFailure(errorMessage: CharSequence?) {
+                TODO("Not yet implemented")
+            }
+        }, null)
+    }
+
     companion object {
-        val RESULT_ENABLE_BT: Int = 0
+        val RESULT_ENABLE_BT: Int = 1110
+        val SELECT_DEVICE_REQUEST_CODE: Int = 1111
     }
 }

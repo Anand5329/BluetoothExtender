@@ -2,8 +2,11 @@ package com.example.bluetoothextender
 
 import BluetoothUtils
 import android.app.ComponentCaller
+import android.bluetooth.BluetoothDevice
+import android.companion.CompanionDeviceManager
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -17,6 +20,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
 
 class MainActivity : ComponentActivity() {
+
+    val btUtils: BluetoothUtils by lazy{ BluetoothUtils(baseContext, this) }
+    val TAG: String = "MainActivity"
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -30,6 +36,8 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+        Log.d(TAG, "Starting setup of bluetooth...")
+        btUtils.ensureBluetoothEnabled()
     }
 
     override fun onActivityResult(
@@ -40,10 +48,22 @@ class MainActivity : ComponentActivity() {
     ) {
         super.onActivityResult(requestCode, resultCode, data, caller)
 
-        if (requestCode == BluetoothUtils.RESULT_ENABLE_BT) {
-            when (resultCode) {
-                RESULT_OK -> {} //TODO: bluetooth enabled
-                RESULT_CANCELED -> {} //TODO: Error, tell user to enable bluetooth
+        when (requestCode) {
+            BluetoothUtils.RESULT_ENABLE_BT -> when (resultCode) {
+                RESULT_OK -> {
+                    Log.d(TAG, "Starting device search...")
+                    btUtils.setupCompanionDeviceSearch()
+                }
+                RESULT_CANCELED -> TODO("Show error message about BT disabled")
+            }
+            BluetoothUtils.SELECT_DEVICE_REQUEST_CODE -> when (resultCode) {
+                RESULT_OK -> {
+                    val deviceToPair: BluetoothDevice? = data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
+                    Log.d(TAG, "Device found, connecting...")
+                    TODO("Connect to device")
+
+
+                }
             }
         }
     }
