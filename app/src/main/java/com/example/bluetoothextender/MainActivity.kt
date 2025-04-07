@@ -1,18 +1,24 @@
 package com.example.bluetoothextender
 
-import BluetoothUtils
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.companion.AssociationInfo
+import android.companion.AssociationRequest
+import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
-import android.content.Intent
+import android.content.Context
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -26,8 +32,14 @@ import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
 
 class MainActivity : ComponentActivity() {
 
-    val btUtils: BluetoothUtils by lazy{ BluetoothUtils(baseContext, this) }
-    val TAG: String = "MainActivity"
+    private lateinit var bluetoothManager: BluetoothManager
+    private lateinit var bluetoothAdapter: BluetoothAdapter
+
+    private lateinit var permRequester: ActivityResultLauncher<String>
+    private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
+
+    private val TAG: String = "MainActivity"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -41,22 +53,40 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        permRequester =
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+                if (!isGranted) {
+                    Log.v(TAG, "Bluetooth Denied")
+                }
+            }
+
+        deviceChooser =
+            registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
+                when (result.resultCode) {
+                    RESULT_OK -> connectToDevice(getDevice(result))
+                    RESULT_CANCELED -> Log.e(TAG, "Bluetooth device selection cancelled")
+                }
+            }
+
         Log.v(TAG, "Starting setup of bluetooth...")
-        btUtils.ensureBluetoothEnabled()
+        bluetoothManager = getSystemService(BluetoothManager::class.java)
+        bluetoothAdapter = bluetoothManager.adapter
+        ensureBluetoothEnabled()
+        setupCompanionDeviceSearch()
+//        btUtils.ensureBluetoothEnabled()
 //        TODO("check permissions and ask to turn on")
 //        ensureBluetoothEnabled()
-        btUtils.setupCompanionDeviceSearch()
+//        btUtils.setupCompanionDeviceSearch()
         Log.v(TAG, "Bluetooth setup done!")
     }
 
-    fun ensureBluetoothEnabled() {
-        val bluetoothManager: BluetoothManager? =
-            this.getSystemService(BluetoothManager::class.java)
-        val bluetoothAdapter: BluetoothAdapter? = bluetoothManager?.adapter
+    private fun ensureBluetoothEnabled() {
+        if (bluetoothAdapter == null) {
+            finish()
+            System.exit(0)
+        }
 
-        val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
-        // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
         if (ActivityCompat.checkSelfPermission(
                 this,
                 Manifest.permission.BLUETOOTH_CONNECT
@@ -71,46 +101,63 @@ class MainActivity : ComponentActivity() {
             // for ActivityCompat#requestPermissions for more details.
             return
         }
-        val requestBtPermission: ActivityResultContracts.RequestPermission =
-            ActivityResultContracts.RequestPermission()
-        requestBtPermission.createIntent(baseContext, BluetoothAdapter.ACTION_REQUEST_ENABLE)
-        registerForActivityResult(requestBtPermission) {}
-        startActivityForResult(enableBtIntent, BluetoothUtils.RESULT_ENABLE_BT, null)
+
+        if (bluetoothAdapter.isEnabled == false) {
+            // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
+            // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
+
+
+            permRequester.launch(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+
+        }
     }
 
-    override fun onActivityResult(
-        requestCode: Int,
-        resultCode: Int,
-        data: Intent?
-    ) {
-        super.onActivityResult(requestCode, resultCode, data)
+    private fun setupCompanionDeviceSearch() {
+        val deviceFilter: BluetoothDeviceFilter = BluetoothDeviceFilter.Builder().build()
+        val pairingRequest: AssociationRequest =
+            AssociationRequest.Builder()
+                .addDeviceFilter(deviceFilter)
+                .build()
 
-        when (requestCode) {
-            BluetoothUtils.RESULT_ENABLE_BT -> when (resultCode) {
-                RESULT_OK -> {
-                    Log.v(TAG, "Starting device search...")
-                }
-
-                RESULT_CANCELED -> {
-                    Log.v(TAG, "Device search cancelled!")
-                    TODO("Show error message about BT disabled")
-                }
-
-                else -> Log.e(TAG, "Unknown result code for $requestCode: $resultCode")
-            }
-            BluetoothUtils.SELECT_DEVICE_REQUEST_CODE -> when (resultCode) {
-                RESULT_OK -> {
-                    Log.v(TAG, "Device found, connecting...")
-                    val deviceToPair: BluetoothDevice? = data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
-                    TODO("figure out why this is not called from startIntentSenderForResult")
-                }
-
-                RESULT_CANCELED -> Log.e(TAG, "Bluetooth selection failed.")
-                else -> Log.e(TAG, "Unknown result code for $requestCode: $resultCode")
+        val deviceManager: CompanionDeviceManager? =
+            getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
+        deviceManager?.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
+            override fun onAssociationPending(intentSender: IntentSender) {
+                val request: IntentSenderRequest = IntentSenderRequest.Builder(intentSender).build()
+                deviceChooser.launch(request)
             }
 
-            else -> Log.e(TAG, "Unknown request code: $requestCode")
-        }
+            override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                // association created
+                Log.v(TAG, "Association created: $associationInfo")
+            }
+
+            // before Android 13
+            override fun onDeviceFound(chooseLauncher: IntentSender) {
+
+                val request: IntentSenderRequest =
+                    IntentSenderRequest.Builder(chooseLauncher).build()
+                deviceChooser.launch(request)
+            }
+
+            override fun onFailure(errorMessage: CharSequence?) {
+                Log.e(
+                    TAG,
+                    "Bluetooth connection failed: " + (errorMessage?.toString()
+                        ?: "no error message")
+                )
+            }
+        }, null)
+    }
+
+    private fun getDevice(activityResult: ActivityResult): BluetoothDevice? {
+        val device: BluetoothDevice? =
+            activityResult.data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
+        return device
+    }
+
+    private fun connectToDevice(device: BluetoothDevice?) {
+        TODO("connect to device")
     }
 }
 
