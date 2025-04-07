@@ -36,8 +36,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        Log.d(TAG, "Starting setup of bluetooth...")
+        Log.v(TAG, "Starting setup of bluetooth...")
         btUtils.ensureBluetoothEnabled()
+        btUtils.setupCompanionDeviceSearch()
+        Log.v(TAG, "Bluetooth setup done!")
     }
 
     override fun onActivityResult(
@@ -51,20 +53,28 @@ class MainActivity : ComponentActivity() {
         when (requestCode) {
             BluetoothUtils.RESULT_ENABLE_BT -> when (resultCode) {
                 RESULT_OK -> {
-                    Log.d(TAG, "Starting device search...")
-                    btUtils.setupCompanionDeviceSearch()
+                    Log.v(TAG, "Starting device search...")
                 }
-                RESULT_CANCELED -> TODO("Show error message about BT disabled")
+
+                RESULT_CANCELED -> {
+                    Log.v(TAG, "Device search cancelled!")
+                    TODO("Show error message about BT disabled")
+                }
+
+                else -> Log.e(TAG, "Unknown result code for $requestCode: $resultCode")
             }
             BluetoothUtils.SELECT_DEVICE_REQUEST_CODE -> when (resultCode) {
                 RESULT_OK -> {
+                    Log.v(TAG, "Device found, connecting...")
                     val deviceToPair: BluetoothDevice? = data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
-                    Log.d(TAG, "Device found, connecting...")
-                    TODO("Connect to device")
-
-
+                    TODO("figure out why this is not called from startIntentSenderForResult")
                 }
+
+                RESULT_CANCELED -> Log.e(TAG, "Bluetooth selection failed.")
+                else -> Log.e(TAG, "Unknown result code for $requestCode: $resultCode")
             }
+
+            else -> Log.e(TAG, "Unknown request code: $requestCode")
         }
     }
 }
