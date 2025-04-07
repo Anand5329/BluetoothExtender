@@ -1,6 +1,7 @@
 import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
+import android.companion.AssociationInfo
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
@@ -43,17 +44,17 @@ class BluetoothUtils(val context: Context, val activity: Activity) {
         val deviceManager: CompanionDeviceManager? =
             context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
         deviceManager?.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
-//            override fun onAssociationPending(intentSender: IntentSender) {
-//
-//                startIntentSenderForResult(
-//                    activity, intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
-//                )
-//            }
-//
-//            override fun onAssociationCreated(associationInfo: AssociationInfo) {
-//                // association created
-//                Log.v(TAG, "Association created: $associationInfo")
-//            }
+            override fun onAssociationPending(intentSender: IntentSender) {
+
+                startIntentSenderForResult(
+                    activity, intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+                )
+            }
+
+            override fun onAssociationCreated(associationInfo: AssociationInfo) {
+                // association created
+                Log.v(TAG, "Association created: $associationInfo")
+            }
 
             // before Android 13
             override fun onDeviceFound(chooseLauncher: IntentSender) {
