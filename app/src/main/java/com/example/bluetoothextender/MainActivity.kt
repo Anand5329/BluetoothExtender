@@ -2,7 +2,6 @@ package com.example.bluetoothextender
 
 import BluetoothUtils
 import android.Manifest
-import android.app.ComponentCaller
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
@@ -14,6 +13,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -42,10 +42,10 @@ class MainActivity : ComponentActivity() {
             }
         }
         Log.v(TAG, "Starting setup of bluetooth...")
-//        btUtils.ensureBluetoothEnabled()
+        btUtils.ensureBluetoothEnabled()
 //        TODO("check permissions and ask to turn on")
-        ensureBluetoothEnabled()
-//        btUtils.setupCompanionDeviceSearch()
+//        ensureBluetoothEnabled()
+        btUtils.setupCompanionDeviceSearch()
         Log.v(TAG, "Bluetooth setup done!")
     }
 
@@ -71,16 +71,19 @@ class MainActivity : ComponentActivity() {
             // for ActivityCompat#requestPermissions for more details.
             return
         }
+        val requestBtPermission: ActivityResultContracts.RequestPermission =
+            ActivityResultContracts.RequestPermission()
+        requestBtPermission.createIntent(baseContext, BluetoothAdapter.ACTION_REQUEST_ENABLE)
+        registerForActivityResult(requestBtPermission) {}
         startActivityForResult(enableBtIntent, BluetoothUtils.RESULT_ENABLE_BT, null)
     }
 
     override fun onActivityResult(
         requestCode: Int,
         resultCode: Int,
-        data: Intent?,
-        caller: ComponentCaller
+        data: Intent?
     ) {
-        super.onActivityResult(requestCode, resultCode, data, caller)
+        super.onActivityResult(requestCode, resultCode, data)
 
         when (requestCode) {
             BluetoothUtils.RESULT_ENABLE_BT -> when (resultCode) {

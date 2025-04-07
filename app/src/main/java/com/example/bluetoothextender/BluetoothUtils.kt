@@ -38,17 +38,27 @@ class BluetoothUtils(val context: Context, val activity: Activity) {
         val pairingRequest: AssociationRequest =
             AssociationRequest.Builder()
                 .addDeviceFilter(deviceFilter)
-//                .setSingleDevice(true)
                 .build()
 
         val deviceManager: CompanionDeviceManager? =
             context.getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
         deviceManager?.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) {
-
-                startIntentSenderForResult(
-                    activity, intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
-                )
+                intentSender.let {
+                    startIntentSenderForResult(
+                        activity,
+                        it,
+                        SELECT_DEVICE_REQUEST_CODE,
+                        null,
+                        0,
+                        0,
+                        0,
+                        null
+                    )
+                }
+//                startIntentSenderForResult(
+//                    activity, intentSender, SELECT_DEVICE_REQUEST_CODE, null, 0, 0, 0, null
+//                )
             }
 
             override fun onAssociationCreated(associationInfo: AssociationInfo) {
@@ -74,7 +84,7 @@ class BluetoothUtils(val context: Context, val activity: Activity) {
 
     companion object {
         val RESULT_ENABLE_BT: Int = 1110
-        val SELECT_DEVICE_REQUEST_CODE: Int = 1111
+        val SELECT_DEVICE_REQUEST_CODE: Int = 1112
 
         val TAG: String = "BluetoothUtils"
     }
