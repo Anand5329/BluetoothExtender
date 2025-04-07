@@ -38,8 +38,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var permRequester: ActivityResultLauncher<String>
     private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
 
-    private val TAG: String = "MainActivity"
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -58,6 +56,9 @@ class MainActivity : ComponentActivity() {
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
                 if (!isGranted) {
                     Log.v(TAG, "Bluetooth Denied")
+                    ensureBluetoothEnabled()
+                } else {
+                    setupCompanionDeviceSearch()
                 }
             }
 
@@ -73,7 +74,6 @@ class MainActivity : ComponentActivity() {
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
         ensureBluetoothEnabled()
-        setupCompanionDeviceSearch()
 //        btUtils.ensureBluetoothEnabled()
 //        TODO("check permissions and ask to turn on")
 //        ensureBluetoothEnabled()
@@ -92,24 +92,17 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), ENABLE_BT_REQUEST)
             return
         }
 
         if (bluetoothAdapter.isEnabled == false) {
             // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
             // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
-
-
             permRequester.launch(BluetoothAdapter.ACTION_REQUEST_ENABLE)
-
+            return
         }
+        setupCompanionDeviceSearch()
     }
 
     private fun setupCompanionDeviceSearch() {
@@ -158,6 +151,33 @@ class MainActivity : ComponentActivity() {
 
     private fun connectToDevice(device: BluetoothDevice?) {
         TODO("connect to device")
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray,
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+
+        when (requestCode) {
+            ENABLE_BT_REQUEST -> {
+                val permissionGranted =
+                    grantResults[permissions.indexOf(Manifest.permission.BLUETOOTH_CONNECT)]
+                if (permissionGranted != PackageManager.PERMISSION_GRANTED) {
+                    Log.v(TAG, "Bluetooth permission denied")
+                    finish()
+                    System.exit(0)
+                } else {
+                    ensureBluetoothEnabled()
+                }
+            }
+        }
+    }
+
+    companion object {
+        private val ENABLE_BT_REQUEST: Int = 100
+        private val TAG: String = "MainActivity"
     }
 }
 
