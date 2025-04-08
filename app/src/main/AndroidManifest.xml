@@ -37,6 +37,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <receiver
+            android:name=".BluetoothConnectionReceiver"
+            android:exported="false">
+            <!--            TODO: create an intent filter for bond change -->
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.BOND_STATE_CHANGED" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </receiver>
     </application>
 
 </manifest>

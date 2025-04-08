@@ -10,8 +10,10 @@ import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -33,12 +35,28 @@ import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
 
 class MainActivity : ComponentActivity() {
 
+    private val btConnectionReceiver: BluetoothConnectionReceiver = BluetoothConnectionReceiver()
+    private val intentFilter: IntentFilter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
+
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
 
     private lateinit var permRequester: ActivityResultLauncher<String>
     private lateinit var btIntentStarter: ActivityResultLauncher<Intent>
     private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
+    private lateinit var connectBondIntent: ActivityResultLauncher<Intent>
+
+    private lateinit var btPermission: String
+
+    override fun onResume() {
+        super.onResume()
+        registerReceiver(btConnectionReceiver, intentFilter)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        unregisterReceiver(btConnectionReceiver)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,6 +71,13 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+
+        if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) {
+            btPermission = Manifest.permission.BLUETOOTH_CONNECT
+        } else {
+            btPermission = Manifest.permission.BLUETOOTH_ADMIN
+        }
+
 
         permRequester =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -101,13 +126,12 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            permRequester.launch(Manifest.permission.BLUETOOTH_ADMIN)
+            permRequester.launch(btPermission)
             return
         }
 
         if (bluetoothAdapter.isEnabled == false) {
             // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
-            // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
             btIntentStarter.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
@@ -158,30 +182,18 @@ class MainActivity : ComponentActivity() {
         return device
     }
 
+
     private fun connectToDevice(device: BluetoothDevice?) {
-        TODO("connect to device")
-    }
-
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<out String>,
-        grantResults: IntArray,
-    ) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-
-        when (requestCode) {
-            ENABLE_BT_REQUEST -> {
-                val permissionGranted =
-                    grantResults[permissions.indexOf(Manifest.permission.BLUETOOTH_CONNECT)]
-                if (permissionGranted != PackageManager.PERMISSION_GRANTED) {
-                    Log.v(TAG, "Bluetooth permission denied")
-                    finish()
-                    System.exit(0)
-                } else {
-                    ensureBluetoothEnabled()
-                }
-            }
-        }
+        assert(
+            Build.VERSION.SDK_INT <= Build.VERSION_CODES.R ||
+                    (ActivityCompat
+                        .checkSelfPermission(
+                            this,
+                            Manifest.permission.BLUETOOTH_CONNECT
+                        ) == PackageManager.PERMISSION_GRANTED
+                            )
+        )
+        device?.createBond()
     }
 
     companion object {
