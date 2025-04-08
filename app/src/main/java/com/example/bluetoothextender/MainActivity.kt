@@ -4,13 +4,13 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothSocket
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
@@ -32,11 +32,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
+import java.util.UUID
 
 class MainActivity : ComponentActivity() {
-
-    private val btConnectionReceiver: BluetoothConnectionReceiver = BluetoothConnectionReceiver()
-    private val intentFilter: IntentFilter = IntentFilter(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
 
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
@@ -47,16 +45,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var connectBondIntent: ActivityResultLauncher<Intent>
 
     private lateinit var btPermission: String
-
-    override fun onResume() {
-        super.onResume()
-        registerReceiver(btConnectionReceiver, intentFilter)
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        unregisterReceiver(btConnectionReceiver)
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -72,12 +60,12 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // choosing the correct permission based on Android version
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) {
             btPermission = Manifest.permission.BLUETOOTH_CONNECT
         } else {
             btPermission = Manifest.permission.BLUETOOTH_ADMIN
         }
-
 
         permRequester =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -193,12 +181,15 @@ class MainActivity : ComponentActivity() {
                         ) == PackageManager.PERMISSION_GRANTED
                             )
         )
-        device?.createBond()
+        Log.v(TAG, "Connecting to device: ${device?.name}")
+        val btSocket: BluetoothSocket? = device?.createRfcommSocketToServiceRecord(SERIAL_BT_UUID)
+        Log.v(TAG, "socket: $btSocket")
     }
 
     companion object {
-        private val ENABLE_BT_REQUEST: Int = 100
         private val TAG: String = "MainActivity"
+
+        val SERIAL_BT_UUID: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB")
     }
 }
 
