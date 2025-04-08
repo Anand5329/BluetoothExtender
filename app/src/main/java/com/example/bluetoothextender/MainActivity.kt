@@ -9,6 +9,7 @@ import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
+import android.content.Intent
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Bundle
@@ -36,6 +37,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var bluetoothAdapter: BluetoothAdapter
 
     private lateinit var permRequester: ActivityResultLauncher<String>
+    private lateinit var btIntentStarter: ActivityResultLauncher<Intent>
     private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,10 +57,22 @@ class MainActivity : ComponentActivity() {
         permRequester =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
                 if (!isGranted) {
-                    Log.v(TAG, "Bluetooth Denied")
-                    ensureBluetoothEnabled()
+                    Log.v(TAG, "Bluetooth Denied. Exiting...")
+                    finish()
+                    System.exit(0)
                 } else {
-                    setupCompanionDeviceSearch()
+                    ensureBluetoothEnabled()
+                }
+            }
+
+        btIntentStarter =
+            registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+                when (result.resultCode) {
+                    RESULT_OK -> setupCompanionDeviceSearch()
+                    RESULT_CANCELED -> {
+                        Log.v(TAG, "Turning on bluetooth denied. Try again.")
+                        ensureBluetoothEnabled()
+                    }
                 }
             }
 
@@ -74,11 +88,6 @@ class MainActivity : ComponentActivity() {
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
         ensureBluetoothEnabled()
-//        btUtils.ensureBluetoothEnabled()
-//        TODO("check permissions and ask to turn on")
-//        ensureBluetoothEnabled()
-//        btUtils.setupCompanionDeviceSearch()
-        Log.v(TAG, "Bluetooth setup done!")
     }
 
     private fun ensureBluetoothEnabled() {
@@ -92,14 +101,14 @@ class MainActivity : ComponentActivity() {
                 Manifest.permission.BLUETOOTH_CONNECT
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), ENABLE_BT_REQUEST)
+            permRequester.launch(Manifest.permission.BLUETOOTH_ADMIN)
             return
         }
 
         if (bluetoothAdapter.isEnabled == false) {
             // starts a sub activity from activity with the passed intent, i.e. to enable bluetooth.
             // when subactivity exits, it returns RESULT_ENABLE_BT to activity's onActivityResult() as requestCode for processing
-            permRequester.launch(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+            btIntentStarter.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
         setupCompanionDeviceSearch()
