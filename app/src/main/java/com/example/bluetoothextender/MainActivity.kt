@@ -4,13 +4,13 @@ import android.Manifest
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothSocket
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
 import android.companion.BluetoothDeviceFilter
 import android.companion.CompanionDeviceManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
@@ -36,6 +36,9 @@ import java.util.UUID
 
 class MainActivity : ComponentActivity() {
 
+    private val bluetoothReceiver: BluetoothReceiver = BluetoothReceiver()
+    private val intentFilter: IntentFilter = IntentFilter(BluetoothDevice.ACTION_UUID)
+
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
 
@@ -45,6 +48,16 @@ class MainActivity : ComponentActivity() {
     private lateinit var connectBondIntent: ActivityResultLauncher<Intent>
 
     private lateinit var btPermission: String
+
+    override fun onResume() {
+        super.onResume()
+        registerReceiver(bluetoothReceiver, intentFilter)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(bluetoothReceiver)
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,6 +79,8 @@ class MainActivity : ComponentActivity() {
         } else {
             btPermission = Manifest.permission.BLUETOOTH_ADMIN
         }
+
+        registerReceiver(bluetoothReceiver, intentFilter)
 
         permRequester =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -182,8 +197,10 @@ class MainActivity : ComponentActivity() {
                             )
         )
         Log.v(TAG, "Connecting to device: ${device?.name}")
-        val btSocket: BluetoothSocket? = device?.createRfcommSocketToServiceRecord(SERIAL_BT_UUID)
-        Log.v(TAG, "socket: $btSocket")
+//        TODO("fetch a **new** UUID using sdp somehow to use to connect to device")
+        device?.fetchUuidsWithSdp()
+
+
     }
 
     companion object {
