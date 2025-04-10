@@ -127,7 +127,11 @@ class MainActivity : ComponentActivity() {
         deviceChooser =
             registerForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { result ->
                 when (result.resultCode) {
-                    RESULT_OK -> fetchSupportedUuidForDevice(getDevice(result))
+                    RESULT_OK -> {
+                        Log.v(TAG, "Found device!")
+                        fetchSupportedUuidForDevice(getDevice(result))
+                    }
+
                     RESULT_CANCELED -> Log.e(TAG, "Bluetooth device selection cancelled")
                 }
             }
@@ -200,9 +204,12 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun getDevice(activityResult: ActivityResult): BluetoothDevice? {
-        val device: BluetoothDevice? =
-            activityResult.data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
-        return device
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE)
+            activityResult.data?.getParcelableExtra(
+                CompanionDeviceManager.EXTRA_ASSOCIATION,
+                AssociationInfo::class.java
+            )?.associatedDevice?.bluetoothDevice
+        else activityResult.data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
     }
 
 
