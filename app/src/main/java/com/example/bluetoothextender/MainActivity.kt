@@ -17,6 +17,9 @@ import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.os.Message
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -34,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
 import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
+import java.io.IOException
 import java.util.UUID
 
 class MainActivity : ComponentActivity() {
@@ -50,24 +54,23 @@ class MainActivity : ComponentActivity() {
 
     private val uuidReceiver: BroadcastReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            assert(intent?.action == BluetoothReceiver.SEND_UUID)
             Log.v(TAG, "Received uuid and device.")
             val supportedUUID: String? = intent?.getStringExtra(BluetoothReceiver.SUPPORTED_UUID)
-            if (supportedUUID == null) {
-                Log.e(TAG, "No supported UUIDs found for device.")
-                ensureBluetoothEnabled()
-            } else {
-                val device: BluetoothDevice? = BluetoothUtils.getDataFromIntent(
-                    intent,
-                    BluetoothReceiver.DEVICE,
-                    BluetoothDevice::class
-                )
-                this@MainActivity.connectToDeviceWithUuid(device, UUID.fromString(supportedUUID))
-            }
+            val device: BluetoothDevice? = BluetoothUtils.getDataFromIntent(
+                intent,
+                BluetoothReceiver.DEVICE,
+                BluetoothDevice::class
+            )
+            this@MainActivity.setupTransferThreads(supportedUUID, device)
         }
     }
     private val uuidIntentFilter: IntentFilter = IntentFilter(BluetoothReceiver.SEND_UUID)
 
     private lateinit var btPermission: String
+
+    private lateinit var readThread: BluetoothReader
+    private lateinit var writeThread: BluetoothWriter
 
     override fun onResume() {
         super.onResume()
@@ -212,19 +215,72 @@ class MainActivity : ComponentActivity() {
         else activityResult.data?.getParcelableExtra(CompanionDeviceManager.EXTRA_DEVICE)
     }
 
-
     private fun fetchSupportedUuidForDevice(device: BluetoothDevice?) {
         assert(checkBluetoothPermission(this))
         Log.v(TAG, "Fetching UUID for device: ${device?.name}")
         device?.fetchUuidsWithSdp()
     }
 
-    private fun connectToDeviceWithUuid(device: BluetoothDevice?, uuid: UUID) {
+    private fun connectToDeviceWithUuid(device: BluetoothDevice?, uuid: UUID): BluetoothSocket? {
         assert(checkBluetoothPermission(this))
         val btSocket: BluetoothSocket? = device?.createRfcommSocketToServiceRecord(uuid)
         Log.v(TAG, "connecting to device ${device?.name} using UUID: $uuid\nsocket: $btSocket")
         bluetoothAdapter.cancelDiscovery()
         btSocket?.connect()
+
+        return btSocket
+    }
+
+    private fun setupTransferThreads(uuid: String?, readDevice: BluetoothDevice?) {
+        if (uuid == null) {
+            Log.e(TAG, "No supported UUIDs found for device.")
+            ensureBluetoothEnabled()
+            return
+        }
+
+        val readSocket: BluetoothSocket? =
+            connectToDeviceWithUuid(readDevice, UUID.fromString(uuid))
+        assert(checkBluetoothPermission(this))
+        if (readSocket == null) {
+            Log.e(TAG, "Socket creation failed for device: ${readDevice?.name}")
+            return
+        }
+
+        readThread = BluetoothReader(readSocket, bluetoothHandler)
+        TODO("initialise writeThread")
+
+    }
+
+    private fun startTransferring() {
+        readThread.start()
+    }
+
+    private fun stopTransferring() {
+        readThread.cancel()
+        readThread.join()
+
+        writeThread.cancel()
+    }
+
+    val bluetoothHandler: Handler = object : Handler(Looper.getMainLooper()) {
+
+        private var bluetoothWriter: BluetoothWriter? = null
+
+        override fun handleMessage(msg: Message) {
+            super.handleMessage(msg)
+
+            when (msg.what) {
+                MESSAGE_READ -> {
+                    val buffer: ByteArray = msg.obj as ByteArray
+                    bluetoothWriter?.write(buffer)
+                }
+
+                MESSAGE_WRITTEN -> Log.v(TAG, "Message sent.")
+                MESSAGE_WRITE_FAILED -> {
+                    this@MainActivity.stopTransferring()
+                }
+            }
+        }
     }
 
     private fun registerReceivers() {
@@ -235,6 +291,54 @@ class MainActivity : ComponentActivity() {
     private fun unregisterReceivers() {
         unregisterReceiver(uuidReceiver)
         unregisterReceiver(bluetoothReceiver)
+    }
+
+    private inner class BluetoothReader(val socket: BluetoothSocket, val handler: Handler) :
+        Thread() {
+
+        private val buffer: ByteArray = ByteArray(1024)
+        override fun run() {
+//            TODO("read data from socket")
+            var numBytes: Int
+
+            while (true) {
+                numBytes = try {
+                    socket.inputStream.read(buffer)
+                } catch (e: IOException) {
+                    Log.v(TAG, "Input stream disconnected", e)
+                    break
+                }
+
+                val readMessage = handler.obtainMessage(MESSAGE_READ, numBytes, -1, buffer)
+                readMessage.sendToTarget()
+            }
+        }
+
+        fun cancel() {
+            socket.close()
+        }
+    }
+
+    private inner class BluetoothWriter(val socket: BluetoothSocket, val handler: Handler) {
+
+        fun write(buffer: ByteArray) {
+            try {
+                socket.outputStream.write(buffer)
+            } catch (e: IOException) {
+                Log.v(TAG, "Connection interrupted", e)
+
+                val errorMessage = handler.obtainMessage(MESSAGE_WRITE_FAILED, e)
+                errorMessage.sendToTarget()
+                return
+            }
+
+            val writtenMessage = handler.obtainMessage(MESSAGE_WRITTEN, buffer)
+            writtenMessage.sendToTarget()
+        }
+
+        fun cancel() {
+            socket.close()
+        }
     }
 
     companion object {
@@ -253,6 +357,10 @@ class MainActivity : ComponentActivity() {
                         ) == PackageManager.PERMISSION_GRANTED
                             )
         }
+
+        val MESSAGE_READ: Int = 0
+        val MESSAGE_WRITTEN: Int = 1
+        val MESSAGE_WRITE_FAILED: Int = 2
     }
 }
 
