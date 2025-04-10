@@ -1,84 +1,53 @@
 package com.example.bluetoothextender
 
-import android.Manifest
 import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothSocket
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.os.ParcelUuid
 import android.os.Parcelable
 import android.util.Log
-import androidx.annotation.RequiresPermission
 import java.util.UUID
-import kotlin.reflect.KClass
 
 
 class BluetoothReceiver : BroadcastReceiver() {
 
-    private inline fun <reified T : Parcelable> getDataFromIntent(
-        intent: Intent?,
-        key: String,
-        clazz: KClass<T>
-    ): T? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return intent?.getParcelableExtra(key, clazz.java)
-        } else {
-            val extra: Parcelable? = intent?.getParcelableExtra<Parcelable>(key)
-            if (extra is T?) {
-                return extra
-            } else {
-                throw ClassCastException("Extra data Couldn't be cast to type ${T::class}, of type ${extra!!::class.qualifiedName}")
-            }
-        }
-    }
-
-    private inline fun <reified T : Parcelable> getArrayDataFromIntent(
-        intent: Intent?,
-        key: String,
-        clazz: KClass<T>
-    ): Array<T>? {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            return intent?.getParcelableArrayExtra(key, clazz.java)
-        } else {
-            val extraArray: Array<Parcelable>? = intent?.getParcelableArrayExtra(key)
-            if (extraArray == null) {
-                return extraArray
-            }
-            for (extra in extraArray) {
-                if (extra !is T) {
-                    throw ClassCastException("Constituent item couldn't be cast to type ${T::class}, of type ${extra::class.qualifiedName}")
-                }
-            }
-            return extraArray as Array<T>
-        }
-    }
-
-    @RequiresPermission(Manifest.permission.BLUETOOTH_CONNECT)
     override fun onReceive(context: Context?, intent: Intent?) {
 
         when (intent?.action) {
             BluetoothDevice.ACTION_UUID -> {
                 val uuids =
-                    getArrayDataFromIntent(intent, BluetoothDevice.EXTRA_UUID, Parcelable::class)
+                    BluetoothUtils.getArrayDataFromIntent(
+                        intent,
+                        BluetoothDevice.EXTRA_UUID,
+                        Parcelable::class
+                    )
                 val device: BluetoothDevice? =
-                    getDataFromIntent(intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class)
+                    BluetoothUtils.getDataFromIntent(
+                        intent,
+                        BluetoothDevice.EXTRA_DEVICE,
+                        BluetoothDevice::class
+                    )
 
                 val supportedUUID: UUID? =
                     UUID.fromString(uuids?.first { it !in RESERVED_UUIDS }.toString())
-                // TODO("send uuid and device back to activity to handle socket")
-                val btSocket: BluetoothSocket? =
-                    device?.createRfcommSocketToServiceRecord(supportedUUID)
-                Log.v(TAG, "socket: $btSocket")
-//                B.cancelDiscovery()
-                btSocket?.connect()
+
+                Log.v(TAG, "Sending UUID and device back...")
+                val sendBackUUID: Intent = Intent(SEND_UUID)
+                sendBackUUID.putExtra(SUPPORTED_UUID, supportedUUID.toString())
+                sendBackUUID.putExtra(DEVICE, device)
+                context?.sendBroadcast(sendBackUUID)
             }
         }
     }
 
     companion object {
         private val TAG: String = "BluetoothReceiver"
+
+        //        val MAIN_ACTION = "com.example.bluetoothextender.SEND_TO_MAIN"
+        val SEND_UUID = "android.intent.action.SEND_UUID"
+        val SUPPORTED_UUID = "SupportedUUID"
+        val DEVICE = "Device"
 
         val AudioSink: ParcelUuid = ParcelUuid.fromString("0000110B-0000-1000-8000-00805F9B34FB")
 
