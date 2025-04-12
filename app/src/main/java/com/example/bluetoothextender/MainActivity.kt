@@ -39,6 +39,7 @@ import androidx.core.app.ActivityCompat
 import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
 import java.io.IOException
 import java.util.UUID
+import java.util.regex.Pattern
 
 class MainActivity : ComponentActivity() {
 
@@ -70,7 +71,10 @@ class MainActivity : ComponentActivity() {
     private lateinit var btPermission: String
 
     private lateinit var readThread: BluetoothReader
+    private lateinit var readDevice: BluetoothDevice
+
     private lateinit var writeThread: BluetoothWriter
+    private lateinit var writeDevice: BluetoothDevice
 
     override fun onResume() {
         super.onResume()
@@ -168,8 +172,18 @@ class MainActivity : ComponentActivity() {
         setupCompanionDeviceSearch()
     }
 
-    private fun setupCompanionDeviceSearch() {
-        val deviceFilter: BluetoothDeviceFilter = BluetoothDeviceFilter.Builder().build()
+    private fun setupCompanionDeviceSearch(alreadyConnectedDevice: BluetoothDevice? = null) {
+        val deviceFilterBuilder: BluetoothDeviceFilter.Builder = BluetoothDeviceFilter.Builder()
+        if (alreadyConnectedDevice != null) {
+            checkBluetoothPermission(this)
+            val notDevicePattern: String = "^(?!" + alreadyConnectedDevice.name.replace(
+                regex = "\\s".toRegex(),
+                replacement = "\\\\s"
+            ) + ").*"
+            Log.v(TAG, "Name Pattern: $notDevicePattern")
+            deviceFilterBuilder.setNamePattern(Pattern.compile(notDevicePattern))
+        }
+        val deviceFilter: BluetoothDeviceFilter = deviceFilterBuilder.build()
         val pairingRequest: AssociationRequest =
             AssociationRequest.Builder()
                 .addDeviceFilter(deviceFilter)
@@ -231,24 +245,48 @@ class MainActivity : ComponentActivity() {
         return btSocket
     }
 
-    private fun setupTransferThreads(uuid: String?, readDevice: BluetoothDevice?) {
+    private fun getSocket(uuid: String?, device: BluetoothDevice?): BluetoothSocket? {
         if (uuid == null) {
             Log.e(TAG, "No supported UUIDs found for device.")
             ensureBluetoothEnabled()
-            return
+            return null
         }
+        return connectToDeviceWithUuid(device, UUID.fromString(uuid))
+    }
 
-        val readSocket: BluetoothSocket? =
-            connectToDeviceWithUuid(readDevice, UUID.fromString(uuid))
+    private fun setupTransferThreads(uuid: String?, device: BluetoothDevice?) {
+
+        val socket = getSocket(uuid, device)
+
         assert(checkBluetoothPermission(this))
-        if (readSocket == null) {
-            Log.e(TAG, "Socket creation failed for device: ${readDevice?.name}")
+        if (socket == null) {
+            Log.e(TAG, "Socket creation failed for device: ${device?.name}")
             return
         }
 
-        readThread = BluetoothReader(readSocket, bluetoothHandler)
-        TODO("initialise writeThread")
+        // TODO("figure out how to manage choosing devices on separate threads")
+        // this will be needed when the ui has two buttons to choose devices
+        if (!this::readDevice.isInitialized) {
+            readDevice = device!!
+            readThread = BluetoothReader(socket, bluetoothHandler)
+            if (!this::writeDevice.isInitialized) {
+                chooseWriteDevice(readDevice)
+            }
+        } else if (!this::writeDevice.isInitialized) {
+            writeDevice = device!!
+            writeThread = BluetoothWriter(socket, bluetoothHandler)
+            Log.v(TAG, "Threads setup, connections ready, can start transmitting")
+        }
 
+    }
+
+    // TODO("figure out how to choose devices in any order")
+    private fun chooseReadDevice() {
+        ensureBluetoothEnabled()
+    }
+
+    private fun chooseWriteDevice(readDevice: BluetoothDevice?) {
+        setupCompanionDeviceSearch(readDevice)
     }
 
     private fun startTransferring() {
