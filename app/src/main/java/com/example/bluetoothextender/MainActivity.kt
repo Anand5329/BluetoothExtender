@@ -49,6 +49,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
 
+    private var bluetoothSetupInProgress: Boolean = false
+
     private lateinit var permRequester: ActivityResultLauncher<String>
     private lateinit var btIntentStarter: ActivityResultLauncher<Intent>
     private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
@@ -76,16 +78,6 @@ class MainActivity : ComponentActivity() {
     private lateinit var writeThread: BluetoothWriter
     private lateinit var writeDevice: BluetoothDevice
 
-    override fun onResume() {
-        super.onResume()
-        registerReceivers()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        unregisterReceivers()
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -106,8 +98,6 @@ class MainActivity : ComponentActivity() {
         } else {
             btPermission = Manifest.permission.BLUETOOTH_ADMIN
         }
-
-        registerReceivers()
 
         permRequester =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
@@ -139,7 +129,9 @@ class MainActivity : ComponentActivity() {
                         fetchSupportedUuidForDevice(getDevice(result))
                     }
 
-                    RESULT_CANCELED -> Log.e(TAG, "Bluetooth device selection cancelled")
+                    RESULT_CANCELED -> {
+                        Log.e(TAG, "Bluetooth device selection cancelled")
+                    }
                 }
             }
 
@@ -147,6 +139,7 @@ class MainActivity : ComponentActivity() {
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
         ensureBluetoothEnabled()
+        setupCompanionDeviceSearch()
     }
 
     private fun ensureBluetoothEnabled() {
@@ -169,7 +162,6 @@ class MainActivity : ComponentActivity() {
             btIntentStarter.launch(Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE))
             return
         }
-        setupCompanionDeviceSearch()
     }
 
     private fun setupCompanionDeviceSearch(alreadyConnectedDevice: BluetoothDevice? = null) {
@@ -180,7 +172,6 @@ class MainActivity : ComponentActivity() {
                 regex = "\\s".toRegex(),
                 replacement = "\\\\s"
             ) + ").*"
-            Log.v(TAG, "Name Pattern: $notDevicePattern")
             deviceFilterBuilder.setNamePattern(Pattern.compile(notDevicePattern))
         }
         val deviceFilter: BluetoothDeviceFilter = deviceFilterBuilder.build()
@@ -188,6 +179,8 @@ class MainActivity : ComponentActivity() {
             AssociationRequest.Builder()
                 .addDeviceFilter(deviceFilter)
                 .build()
+
+        registerReceivers()
 
         val deviceManager: CompanionDeviceManager? =
             getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
@@ -216,6 +209,7 @@ class MainActivity : ComponentActivity() {
                     "Bluetooth connection failed: " + (errorMessage?.toString()
                         ?: "no error message")
                 )
+                unregisterReceivers()
             }
         }, null)
     }
@@ -233,6 +227,7 @@ class MainActivity : ComponentActivity() {
         assert(checkBluetoothPermission(this))
         Log.v(TAG, "Fetching UUID for device: ${device?.name}")
         device?.fetchUuidsWithSdp()
+        Log.v(TAG, "[fetch]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
     }
 
     private fun connectToDeviceWithUuid(device: BluetoothDevice?, uuid: UUID): BluetoothSocket? {
@@ -242,12 +237,15 @@ class MainActivity : ComponentActivity() {
         bluetoothAdapter.cancelDiscovery()
         btSocket?.connect()
 
+        Log.v(TAG, "[connect]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
+
         return btSocket
     }
 
     private fun getSocket(uuid: String?, device: BluetoothDevice?): BluetoothSocket? {
         if (uuid == null) {
             Log.e(TAG, "No supported UUIDs found for device.")
+            unregisterReceivers()
             ensureBluetoothEnabled()
             return null
         }
@@ -256,6 +254,8 @@ class MainActivity : ComponentActivity() {
 
     private fun setupTransferThreads(uuid: String?, device: BluetoothDevice?) {
 
+        unregisterReceivers()
+
         val socket = getSocket(uuid, device)
 
         assert(checkBluetoothPermission(this))
@@ -263,6 +263,7 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "Socket creation failed for device: ${device?.name}")
             return
         }
+        Log.v(TAG, "[setup]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
 
         // TODO("figure out how to manage choosing devices on separate threads")
         // this will be needed when the ui has two buttons to choose devices
@@ -276,16 +277,22 @@ class MainActivity : ComponentActivity() {
             writeDevice = device!!
             writeThread = BluetoothWriter(socket, bluetoothHandler)
             Log.v(TAG, "Threads setup, connections ready, can start transmitting")
+            Log.v(
+                TAG,
+                "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
+            )
         }
 
     }
 
     // TODO("figure out how to choose devices in any order")
-    private fun chooseReadDevice() {
+    private fun chooseReadDevice(writeDevice: BluetoothDevice? = null) {
         ensureBluetoothEnabled()
+        setupCompanionDeviceSearch(writeDevice)
     }
 
-    private fun chooseWriteDevice(readDevice: BluetoothDevice?) {
+    private fun chooseWriteDevice(readDevice: BluetoothDevice? = null) {
+        ensureBluetoothEnabled()
         setupCompanionDeviceSearch(readDevice)
     }
 
@@ -322,6 +329,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun registerReceivers() {
+        bluetoothSetupInProgress = true
         registerReceiver(uuidReceiver, uuidIntentFilter, receiverFlags)
         registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
     }
@@ -329,6 +337,7 @@ class MainActivity : ComponentActivity() {
     private fun unregisterReceivers() {
         unregisterReceiver(uuidReceiver)
         unregisterReceiver(bluetoothReceiver)
+        bluetoothSetupInProgress = false
     }
 
     private inner class BluetoothReader(val socket: BluetoothSocket, val handler: Handler) :
@@ -336,7 +345,6 @@ class MainActivity : ComponentActivity() {
 
         private val buffer: ByteArray = ByteArray(1024)
         override fun run() {
-//            TODO("read data from socket")
             var numBytes: Int
 
             while (true) {
