@@ -28,15 +28,8 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat
-import com.example.bluetoothextender.ui.theme.BluetoothExtenderTheme
+import com.example.bluetoothextender.ui.home.HomePage
 import java.io.IOException
 import java.util.UUID
 import java.util.regex.Pattern
@@ -80,16 +73,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        enableEdgeToEdge() // TODO("Make actually edge to edge visually")
         setContent {
-            BluetoothExtenderTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
-            }
+            HomePage()
         }
 
         // choosing the correct permission based on Android version
@@ -138,8 +124,8 @@ class MainActivity : ComponentActivity() {
         Log.v(TAG, "Starting setup of bluetooth...")
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
-        ensureBluetoothEnabled()
-        setupCompanionDeviceSearch()
+//        ensureBluetoothEnabled()
+//        setupCompanionDeviceSearch()
     }
 
     private fun ensureBluetoothEnabled() {
@@ -227,7 +213,6 @@ class MainActivity : ComponentActivity() {
         assert(checkBluetoothPermission(this))
         Log.v(TAG, "Fetching UUID for device: ${device?.name}")
         device?.fetchUuidsWithSdp()
-        Log.v(TAG, "[fetch]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
     }
 
     private fun connectToDeviceWithUuid(device: BluetoothDevice?, uuid: UUID): BluetoothSocket? {
@@ -236,8 +221,6 @@ class MainActivity : ComponentActivity() {
         Log.v(TAG, "connecting to device ${device?.name} using UUID: $uuid\nsocket: $btSocket")
         bluetoothAdapter.cancelDiscovery()
         btSocket?.connect()
-
-        Log.v(TAG, "[connect]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
 
         return btSocket
     }
@@ -253,7 +236,6 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupTransferThreads(uuid: String?, device: BluetoothDevice?) {
-
         unregisterReceivers()
 
         val socket = getSocket(uuid, device)
@@ -263,7 +245,6 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "Socket creation failed for device: ${device?.name}")
             return
         }
-        Log.v(TAG, "[setup]Bluetooth connection setup in progress: $bluetoothSetupInProgress")
 
         // TODO("figure out how to manage choosing devices on separate threads")
         // this will be needed when the ui has two buttons to choose devices
@@ -407,21 +388,5 @@ class MainActivity : ComponentActivity() {
         val MESSAGE_READ: Int = 0
         val MESSAGE_WRITTEN: Int = 1
         val MESSAGE_WRITE_FAILED: Int = 2
-    }
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    BluetoothExtenderTheme {
-        Greeting("Android")
     }
 }
