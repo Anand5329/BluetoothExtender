@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 
 @Preview
 @Composable
-fun HomePage() {
+fun HomePage(action1: () -> Unit, action2: () -> Unit) {
     Column(
         modifier = Modifier
             .padding(10.dp)
@@ -30,7 +30,8 @@ fun HomePage() {
         ) {
             FilledButton(
                 displayText = "Source 1",
-            ) { }
+                onClick = action1
+            )
         }
         Row(
             modifier = Modifier
@@ -39,7 +40,8 @@ fun HomePage() {
         ) {
             FilledButton(
                 displayText = "Target",
-            ) { }
+                onClick = action2
+            )
         }
     }
 }
@@ -47,7 +49,7 @@ fun HomePage() {
 @Composable
 fun FilledButton(displayText: String, onClick: () -> Unit) {
     Button(
-        onClick = { onClick() },
+        onClick = onClick,
         modifier = Modifier
             .padding(10.dp)
     ) {

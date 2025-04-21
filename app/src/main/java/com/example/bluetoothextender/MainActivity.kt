@@ -75,7 +75,10 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // TODO("Make actually edge to edge visually")
         setContent {
-            HomePage()
+            HomePage(
+                action1 = { chooseReadDevice() },
+                action2 = { chooseWriteDevice() }
+            )
         }
 
         // choosing the correct permission based on Android version
@@ -169,7 +172,7 @@ class MainActivity : ComponentActivity() {
         registerReceivers()
 
         val deviceManager: CompanionDeviceManager? =
-            getSystemService(Context.COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
+            getSystemService(COMPANION_DEVICE_SERVICE) as CompanionDeviceManager?
         deviceManager?.associate(pairingRequest, object : CompanionDeviceManager.Callback() {
             override fun onAssociationPending(intentSender: IntentSender) {
                 val request: IntentSenderRequest = IntentSenderRequest.Builder(intentSender).build()
