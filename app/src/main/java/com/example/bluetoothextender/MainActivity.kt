@@ -44,6 +44,13 @@ class MainActivity : ComponentActivity() {
 
     private var bluetoothSetupInProgress: Boolean = false
 
+    private enum class DeviceType {
+        SOURCE,
+        TARGET
+    }
+
+    private lateinit var currentDeviceSetupType: DeviceType
+
     private lateinit var permRequester: ActivityResultLauncher<String>
     private lateinit var btIntentStarter: ActivityResultLauncher<Intent>
     private lateinit var deviceChooser: ActivityResultLauncher<IntentSenderRequest>
@@ -71,13 +78,15 @@ class MainActivity : ComponentActivity() {
     private lateinit var writeThread: BluetoothWriter
     private lateinit var writeDevice: BluetoothDevice
 
+    private var previousDevice: BluetoothDevice? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // TODO("Make actually edge to edge visually")
         setContent {
             HomePage(
-                action1 = { chooseReadDevice() },
-                action2 = { chooseWriteDevice() }
+                action1 = this::chooseReadDevice,
+                action2 = this::chooseWriteDevice
             )
         }
 
@@ -127,8 +136,6 @@ class MainActivity : ComponentActivity() {
         Log.v(TAG, "Starting setup of bluetooth...")
         bluetoothManager = getSystemService(BluetoothManager::class.java)
         bluetoothAdapter = bluetoothManager.adapter
-//        ensureBluetoothEnabled()
-//        setupCompanionDeviceSearch()
     }
 
     private fun ensureBluetoothEnabled() {
@@ -249,17 +256,26 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        // TODO("figure out how to manage choosing devices on separate threads")
-        // this will be needed when the ui has two buttons to choose devices
-        if (!this::readDevice.isInitialized) {
-            readDevice = device!!
-            readThread = BluetoothReader(socket, bluetoothHandler)
-            if (!this::writeDevice.isInitialized) {
-                chooseWriteDevice(readDevice)
+        if (!this::currentDeviceSetupType.isInitialized) {
+            Log.e(TAG, "No device chosen, assuming read device")
+            currentDeviceSetupType = DeviceType.SOURCE
+        }
+
+        when (currentDeviceSetupType) {
+            DeviceType.SOURCE -> {
+                readDevice = device!!
+                readThread = BluetoothReader(socket, bluetoothHandler)
+                previousDevice = readDevice
             }
-        } else if (!this::writeDevice.isInitialized) {
-            writeDevice = device!!
-            writeThread = BluetoothWriter(socket, bluetoothHandler)
+
+            DeviceType.TARGET -> {
+                writeDevice = device!!
+                writeThread = BluetoothWriter(socket, bluetoothHandler)
+                previousDevice = writeDevice
+            }
+        }
+
+        if (this::readDevice.isInitialized && this::writeDevice.isInitialized) {
             Log.v(TAG, "Threads setup, connections ready, can start transmitting")
             Log.v(
                 TAG,
@@ -269,15 +285,25 @@ class MainActivity : ComponentActivity() {
 
     }
 
-    // TODO("figure out how to choose devices in any order")
-    private fun chooseReadDevice(writeDevice: BluetoothDevice? = null) {
+    private fun chooseReadDevice() {
+        checkSetupAndSetDeviceType(DeviceType.SOURCE)
         ensureBluetoothEnabled()
-        setupCompanionDeviceSearch(writeDevice)
+        setupCompanionDeviceSearch(previousDevice)
     }
 
-    private fun chooseWriteDevice(readDevice: BluetoothDevice? = null) {
+    private fun chooseWriteDevice() {
+        checkSetupAndSetDeviceType(DeviceType.TARGET)
         ensureBluetoothEnabled()
-        setupCompanionDeviceSearch(readDevice)
+        setupCompanionDeviceSearch(previousDevice)
+    }
+
+    private fun checkSetupAndSetDeviceType(deviceType: DeviceType): Boolean {
+        if (bluetoothSetupInProgress) {
+            Log.e(TAG, "Setup already in progress.")
+            return false
+        }
+        currentDeviceSetupType = deviceType
+        return true
     }
 
     private fun startTransferring() {
