@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 @Preview
 @Composable
 fun HomePage(action1: () -> Unit, action2: () -> Unit) {
+
     Column(
         modifier = Modifier
             .padding(10.dp)

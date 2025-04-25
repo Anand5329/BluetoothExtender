@@ -84,7 +84,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // TODO("Make actually edge to edge visually")
         setContent {
-            HomePage(
+            HomePage( //TODO("implement buttons disable when in process")
                 action1 = this::chooseReadDevice,
                 action2 = this::chooseWriteDevice
             )
