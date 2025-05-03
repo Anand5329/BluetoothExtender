@@ -1,9 +1,11 @@
 package com.example.bluetoothextender
 
 import android.Manifest
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -281,8 +283,50 @@ class MainActivity : ComponentActivity() {
                 TAG,
                 "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
             )
+            setupAudioConnection(writeDevice)
         }
 
+    }
+
+    private fun setupAudioConnection(destination: BluetoothDevice?) {
+
+        var bluetoothAudioHandler: BluetoothA2dp? = null
+
+        val profileListener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
+                if (profile == BluetoothProfile.A2DP) {
+                    bluetoothAudioHandler = proxy as BluetoothA2dp
+                    try {
+                        bluetoothAudioHandler!!.javaClass.getMethod(
+                            "connect",
+                            BluetoothDevice::class.java
+                        ).invoke(bluetoothAudioHandler, destination)
+                        Log.v(TAG, "Destination Connected via A2DP profile")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error encountered while connecting to A2DP", e)
+                    }
+                } else {
+                    Log.v(TAG, "Profile found: $profile")
+                }
+            }
+
+            override fun onServiceDisconnected(profile: Int) {
+                if (profile == BluetoothProfile.A2DP) {
+                    try {
+                        bluetoothAudioHandler!!.javaClass.getMethod(
+                            "disconnect",
+                            BluetoothDevice::class.java
+                        ).invoke(bluetoothAudioHandler, destination)
+                        Log.v(TAG, "Destination Disconnected from A2DP")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error encountered while disconnecting from A2DP", e)
+                    }
+                    bluetoothAudioHandler = null
+                }
+            }
+        }
+
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET)
     }
 
     private fun chooseReadDevice() {
