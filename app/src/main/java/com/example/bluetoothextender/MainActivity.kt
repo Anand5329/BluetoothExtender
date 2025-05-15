@@ -72,46 +72,6 @@ class MainActivity : ComponentActivity() {
     }
     private val uuidIntentFilter: IntentFilter = IntentFilter(BluetoothReceiver.SEND_UUID)
 
-    private val a2dpConnectionStateChangeReceiver: BroadcastReceiver =
-        object : BroadcastReceiver() {
-            override fun onReceive(conetext: Context?, intent: Intent?) {
-                assert(intent?.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
-
-                val state: Int? = intent?.getIntExtra(
-                    BluetoothProfile.EXTRA_STATE,
-                    BluetoothProfile.STATE_DISCONNECTED
-                )
-
-                if (state == BluetoothProfile.STATE_CONNECTED) {
-//                val device: BluetoothDevice? = BluetoothUtils.getDataFromIntent(intent, BluetoothProfile.EXTRA_STATE,
-//                    BluetoothDevice::class)
-                    Log.v(TAG, "A2DP device state: connected")
-
-                }
-            }
-        }
-    private val a2dpConnectionIntentFilter: IntentFilter =
-        IntentFilter(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
-
-    private val a2dpPlayingStateChangeReceiver: BroadcastReceiver = object : BroadcastReceiver() {
-        override fun onReceive(conetext: Context?, intent: Intent?) {
-            assert(intent?.action == BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED)
-
-            val state: Int? = intent?.getIntExtra(
-                BluetoothProfile.EXTRA_STATE,
-                BluetoothProfile.STATE_DISCONNECTED
-            )
-
-            if (state == BluetoothA2dp.STATE_PLAYING) {
-                Log.v(TAG, "A2DP device state: playing")
-            } else {
-                Log.v(TAG, "A2DP device state: not playing")
-            }
-        }
-    }
-    private val a2dpPlayingIntentFilter: IntentFilter =
-        IntentFilter(BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED)
-
     private lateinit var btPermission: String
 
     private lateinit var readThread: BluetoothReader
@@ -324,14 +284,11 @@ class MainActivity : ComponentActivity() {
                 "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
             )
             setupAudioConnection(writeDevice)
-            startTransferring()
         }
 
     }
 
     private fun setupAudioConnection(destination: BluetoothDevice?) {
-        // TODO("only one A2DP device is supported on android, so it'll have to be the source and this device as sink")
-        // https://developer.android.com/reference/android/bluetooth/BluetoothA2dp?_gl=1*1aqc4ua*_up*MQ..*_ga*MTk5OTQzMzA1LjE3NDczNDM1NjE.*_ga_6HH9YJMN9M*czE3NDczNDM1NjAkbzEkZzAkdDE3NDczNDM1NzEkajAkbDAkaDE5NDI1MTQ5OTE.#:~:text=supports%20one%20connected%20Bluetooth%20A2dp
 
         var bluetoothAudioHandler: BluetoothA2dp? = null
 
@@ -345,10 +302,6 @@ class MainActivity : ComponentActivity() {
                             BluetoothDevice::class.java
                         ).invoke(bluetoothAudioHandler, destination)
                         Log.v(TAG, "Destination Connected via A2DP profile")
-                        checkBluetoothPermission(this@MainActivity)
-                        val isPlaying: Boolean =
-                            bluetoothAudioHandler!!.isA2dpPlaying(destination!!)
-                        Log.v(TAG, "isPlaying over A2DP: $isPlaying")
                     } catch (e: Exception) {
                         Log.e(TAG, "Error encountered while connecting to A2DP", e)
                     }
@@ -373,7 +326,7 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP)
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET)
     }
 
     private fun chooseReadDevice() {
@@ -433,15 +386,11 @@ class MainActivity : ComponentActivity() {
         bluetoothSetupInProgress = true
         registerReceiver(uuidReceiver, uuidIntentFilter, receiverFlags)
         registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
-        registerReceiver(a2dpConnectionStateChangeReceiver, a2dpConnectionIntentFilter)
-        registerReceiver(a2dpPlayingStateChangeReceiver, a2dpPlayingIntentFilter)
     }
 
     private fun unregisterReceivers() {
         unregisterReceiver(uuidReceiver)
         unregisterReceiver(bluetoothReceiver)
-        unregisterReceiver(a2dpConnectionStateChangeReceiver)
-        unregisterReceiver(a2dpPlayingStateChangeReceiver)
         bluetoothSetupInProgress = false
     }
 
