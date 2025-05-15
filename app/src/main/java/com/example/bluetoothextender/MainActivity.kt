@@ -323,7 +323,7 @@ class MainActivity : ComponentActivity() {
                 TAG,
                 "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
             )
-            setupAudioConnection(writeDevice)
+            setupAudioConnection(readDevice)
             startTransferring()
         }
 
