@@ -306,13 +306,13 @@ class MainActivity : ComponentActivity() {
         when (currentDeviceSetupType) {
             DeviceType.SOURCE -> {
                 readDevice = device!!
-                readThread = BluetoothReader(socket, bluetoothHandler)
+//                readThread = BluetoothReader(socket, bluetoothHandler)
                 previousDevice = readDevice
             }
 
             DeviceType.TARGET -> {
                 writeDevice = device!!
-                writeThread = BluetoothWriter(socket, bluetoothHandler)
+//                writeThread = BluetoothWriter(socket, bluetoothHandler)
                 previousDevice = writeDevice
             }
         }
@@ -324,14 +324,15 @@ class MainActivity : ComponentActivity() {
                 "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
             )
             setupAudioConnection(readDevice)
-            startTransferring()
+//            startTransferring()
         }
 
     }
 
-    private fun setupAudioConnection(destination: BluetoothDevice?) {
+    private fun setupAudioConnection(source: BluetoothDevice?) {
         // TODO("only one A2DP device is supported on android, so it'll have to be the source and this device as sink")
         // https://developer.android.com/reference/android/bluetooth/BluetoothA2dp?_gl=1*1aqc4ua*_up*MQ..*_ga*MTk5OTQzMzA1LjE3NDczNDM1NjE.*_ga_6HH9YJMN9M*czE3NDczNDM1NjAkbzEkZzAkdDE3NDczNDM1NzEkajAkbDAkaDE5NDI1MTQ5OTE.#:~:text=supports%20one%20connected%20Bluetooth%20A2dp
+        // It seems android doesn't support being an A2DP sink. So try another profile?
 
         var bluetoothAudioHandler: BluetoothA2dp? = null
 
@@ -343,11 +344,11 @@ class MainActivity : ComponentActivity() {
                         bluetoothAudioHandler!!.javaClass.getMethod(
                             "connect",
                             BluetoothDevice::class.java
-                        ).invoke(bluetoothAudioHandler, destination)
+                        ).invoke(bluetoothAudioHandler, source)
                         Log.v(TAG, "Destination Connected via A2DP profile")
                         checkBluetoothPermission(this@MainActivity)
                         val isPlaying: Boolean =
-                            bluetoothAudioHandler!!.isA2dpPlaying(destination!!)
+                            bluetoothAudioHandler!!.isA2dpPlaying(source!!)
                         Log.v(TAG, "isPlaying over A2DP: $isPlaying")
                     } catch (e: Exception) {
                         Log.e(TAG, "Error encountered while connecting to A2DP", e)
@@ -363,7 +364,7 @@ class MainActivity : ComponentActivity() {
                         bluetoothAudioHandler!!.javaClass.getMethod(
                             "disconnect",
                             BluetoothDevice::class.java
-                        ).invoke(bluetoothAudioHandler, destination)
+                        ).invoke(bluetoothAudioHandler, source)
                         Log.v(TAG, "Destination Disconnected from A2DP")
                     } catch (e: Exception) {
                         Log.e(TAG, "Error encountered while disconnecting from A2DP", e)
