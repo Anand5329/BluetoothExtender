@@ -344,14 +344,16 @@ class MainActivity : ComponentActivity() {
                 if (profile == BluetoothProfile.A2DP) {
                     bluetoothAudioHandler = proxy as BluetoothA2dp
                     try {
-                        bluetoothAudioHandler!!.javaClass.getMethod(
+                        val result = bluetoothAudioHandler!!.javaClass.getMethod(
                             "connect",
                             BluetoothDevice::class.java
                         ).invoke(bluetoothAudioHandler, source)
-                        Log.v(TAG, "Destination Connected via A2DP profile")
+                        Log.v(TAG, "Destination Connected via A2DP profile: $result")
                         assert(checkBluetoothPermission(this@MainActivity))
                         val isPlaying: Boolean =
                             bluetoothAudioHandler!!.isA2dpPlaying(source!!)
+                        // when source is Soundcore, it works and music is playing over a2dp. But when the source is the laptop, it canot form a connection
+                        //caveat: soundcore needs to be already be connected prior
                         Log.v(TAG, "isPlaying over A2DP: $isPlaying")
                         val state: Int = bluetoothAudioHandler!!.getConnectionState(source)
                         Log.v(TAG, "Connection state: $state")
