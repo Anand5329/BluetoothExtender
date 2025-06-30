@@ -1,9 +1,12 @@
 package com.example.bluetoothextender
 
 import android.Manifest
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothSocket
 import android.companion.AssociationInfo
 import android.companion.AssociationRequest
@@ -69,6 +72,46 @@ class MainActivity : ComponentActivity() {
         }
     }
     private val uuidIntentFilter: IntentFilter = IntentFilter(BluetoothReceiver.SEND_UUID)
+
+    private val a2dpConnectionStateChangeReceiver: BroadcastReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(conetext: Context?, intent: Intent?) {
+                assert(intent?.action == BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+
+                val state: Int? = intent?.getIntExtra(
+                    BluetoothProfile.EXTRA_STATE,
+                    BluetoothProfile.STATE_DISCONNECTED
+                )
+
+                if (state == BluetoothProfile.STATE_CONNECTED) {
+//                val device: BluetoothDevice? = BluetoothUtils.getDataFromIntent(intent, BluetoothProfile.EXTRA_STATE,
+//                    BluetoothDevice::class)
+                    Log.v(TAG, "A2DP device state: connected")
+
+                }
+            }
+        }
+    private val a2dpConnectionIntentFilter: IntentFilter =
+        IntentFilter(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+
+    private val a2dpPlayingStateChangeReceiver: BroadcastReceiver = object : BroadcastReceiver() {
+        override fun onReceive(conetext: Context?, intent: Intent?) {
+            assert(intent?.action == BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED)
+
+            val state: Int? = intent?.getIntExtra(
+                BluetoothProfile.EXTRA_STATE,
+                BluetoothProfile.STATE_DISCONNECTED
+            )
+
+            if (state == BluetoothA2dp.STATE_PLAYING) {
+                Log.v(TAG, "A2DP device state: playing")
+            } else {
+                Log.v(TAG, "A2DP device state: not playing")
+            }
+        }
+    }
+    private val a2dpPlayingIntentFilter: IntentFilter =
+        IntentFilter(BluetoothA2dp.ACTION_PLAYING_STATE_CHANGED)
 
     private lateinit var btPermission: String
 
@@ -248,13 +291,13 @@ class MainActivity : ComponentActivity() {
     private fun setupTransferThreads(uuid: String?, device: BluetoothDevice?) {
         unregisterReceivers()
 
-        val socket = getSocket(uuid, device)
+//        val socket = getSocket(uuid, device)
 
         assert(checkBluetoothPermission(this))
-        if (socket == null) {
-            Log.e(TAG, "Socket creation failed for device: ${device?.name}")
-            return
-        }
+//        if (socket == null) {
+//            Log.e(TAG, "Socket creation failed for device: ${device?.name}")
+//            return
+//        }
 
         if (!this::currentDeviceSetupType.isInitialized) {
             Log.e(TAG, "No device chosen, assuming read device")
@@ -264,13 +307,13 @@ class MainActivity : ComponentActivity() {
         when (currentDeviceSetupType) {
             DeviceType.SOURCE -> {
                 readDevice = device!!
-                readThread = BluetoothReader(socket, bluetoothHandler)
+//                readThread = BluetoothReader(socket, bluetoothHandler)
                 previousDevice = readDevice
             }
 
             DeviceType.TARGET -> {
                 writeDevice = device!!
-                writeThread = BluetoothWriter(socket, bluetoothHandler)
+//                writeThread = BluetoothWriter(socket, bluetoothHandler)
                 previousDevice = writeDevice
             }
         }
@@ -281,8 +324,98 @@ class MainActivity : ComponentActivity() {
                 TAG,
                 "Read device class: ${readDevice.bluetoothClass.deviceClass}; Write device class: ${writeDevice.bluetoothClass.deviceClass}"
             )
+            setupAudioConnection(readDevice)
+//            setupHandsfreeConnection(readDevice)
+//            startTransferring()
+
         }
 
+    }
+
+    private fun setupAudioConnection(source: BluetoothDevice?) {
+        // TODO("only one A2DP device is supported on android, so it'll have to be the source and this device as sink")
+        // https://developer.android.com/reference/android/bluetooth/BluetoothA2dp?_gl=1*1aqc4ua*_up*MQ..*_ga*MTk5OTQzMzA1LjE3NDczNDM1NjE.*_ga_6HH9YJMN9M*czE3NDczNDM1NjAkbzEkZzAkdDE3NDczNDM1NzEkajAkbDAkaDE5NDI1MTQ5OTE.#:~:text=supports%20one%20connected%20Bluetooth%20A2dp
+        // It seems android doesn't support being an A2DP sink. So try another profile?
+
+        var bluetoothAudioHandler: BluetoothA2dp? = null
+
+        val profileListener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
+                if (profile == BluetoothProfile.A2DP) {
+                    bluetoothAudioHandler = proxy as BluetoothA2dp
+                    try {
+                        val result = bluetoothAudioHandler!!.javaClass.getMethod(
+                            "connect",
+                            BluetoothDevice::class.java
+                        ).invoke(bluetoothAudioHandler, source)
+                        Log.v(TAG, "Destination Connected via A2DP profile: $result")
+                        assert(checkBluetoothPermission(this@MainActivity))
+                        val isPlaying: Boolean =
+                            bluetoothAudioHandler!!.isA2dpPlaying(source!!)
+                        // when source is Soundcore, it works and music is playing over a2dp. But when the source is the laptop, it canot form a connection
+                        //caveat: soundcore needs to be already be connected prior
+                        Log.v(TAG, "isPlaying over A2DP: $isPlaying")
+                        val state: Int = bluetoothAudioHandler!!.getConnectionState(source)
+                        Log.v(TAG, "Connection state: $state")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error encountered while connecting to A2DP", e)
+                    }
+                } else {
+                    Log.v(TAG, "Profile found: $profile")
+                }
+            }
+
+            override fun onServiceDisconnected(profile: Int) {
+                if (profile == BluetoothProfile.A2DP) {
+                    try {
+                        bluetoothAudioHandler!!.javaClass.getMethod(
+                            "disconnect",
+                            BluetoothDevice::class.java
+                        ).invoke(bluetoothAudioHandler, source)
+                        Log.v(TAG, "Destination Disconnected from A2DP")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Error encountered while disconnecting from A2DP", e)
+                    }
+                    bluetoothAudioHandler = null
+                }
+            }
+        }
+
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.A2DP)
+    }
+
+    private fun setupHandsfreeConnection(source: BluetoothDevice?) {
+        var bluetoothHeadset: BluetoothHeadset? = getProxyProfileListenerFor(
+            BluetoothProfile.HEADSET
+        )
+        assert(checkBluetoothPermission(this))
+        val isConnected: Boolean? = bluetoothHeadset?.isAudioConnected(source!!)
+        Log.v(TAG, "BluetoothHeadset isAudioConnected: $isConnected")
+    }
+
+    private fun <T> getProxyProfileListenerFor(getProfile: Int): T? {
+
+        var bluetoothProxyListener: T? = null
+
+        val profileListener = object : BluetoothProfile.ServiceListener {
+            override fun onServiceConnected(profile: Int, proxy: BluetoothProfile?) {
+                if (profile == getProfile) {
+                    bluetoothProxyListener = proxy as T
+                } else {
+                    Log.v(TAG, "Profile found: $profile")
+                }
+            }
+
+            override fun onServiceDisconnected(profile: Int) {
+                if (profile == getProfile) {
+                    bluetoothProxyListener = null
+                }
+            }
+        }
+
+        bluetoothAdapter.getProfileProxy(this, profileListener, BluetoothProfile.HEADSET)
+
+        return bluetoothProxyListener
     }
 
     private fun chooseReadDevice() {
@@ -342,11 +475,15 @@ class MainActivity : ComponentActivity() {
         bluetoothSetupInProgress = true
         registerReceiver(uuidReceiver, uuidIntentFilter, receiverFlags)
         registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
+        registerReceiver(a2dpConnectionStateChangeReceiver, a2dpConnectionIntentFilter)
+        registerReceiver(a2dpPlayingStateChangeReceiver, a2dpPlayingIntentFilter)
     }
 
     private fun unregisterReceivers() {
         unregisterReceiver(uuidReceiver)
         unregisterReceiver(bluetoothReceiver)
+        unregisterReceiver(a2dpConnectionStateChangeReceiver)
+        unregisterReceiver(a2dpPlayingStateChangeReceiver)
         bluetoothSetupInProgress = false
     }
 
