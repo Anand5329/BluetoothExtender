@@ -8,14 +8,32 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
-@Preview
+class HomeButtonsViewModel : ViewModel() {
+    private val _isReady = MutableStateFlow(true)
+    val enableState: StateFlow<Boolean> get() = _isReady
+
+    fun enable() {
+        _isReady.value = true
+    }
+
+    fun disable() {
+        _isReady.value = false
+    }
+}
+
 @Composable
-fun HomePage(action1: () -> Unit, action2: () -> Unit) {
+fun HomePage(action1: () -> Unit, action2: () -> Unit, buttonsViewModel: HomeButtonsViewModel) {
+
+    val isReady by buttonsViewModel.enableState.collectAsState()
 
     Column(
         modifier = Modifier
@@ -31,7 +49,8 @@ fun HomePage(action1: () -> Unit, action2: () -> Unit) {
         ) {
             FilledButton(
                 displayText = "Source 1",
-                onClick = action1
+                onClick = action1,
+                enabled = isReady
             )
         }
         Row(
@@ -41,18 +60,20 @@ fun HomePage(action1: () -> Unit, action2: () -> Unit) {
         ) {
             FilledButton(
                 displayText = "Target",
-                onClick = action2
+                onClick = action2,
+                enabled = isReady
             )
         }
     }
 }
 
 @Composable
-fun FilledButton(displayText: String, onClick: () -> Unit) {
+fun FilledButton(displayText: String, onClick: () -> Unit, enabled: Boolean) {
     Button(
         onClick = onClick,
         modifier = Modifier
-            .padding(10.dp)
+            .padding(10.dp),
+        enabled = enabled
     ) {
         Text(text = displayText)
     }

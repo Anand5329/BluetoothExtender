@@ -32,6 +32,7 @@ import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.app.ActivityCompat
+import com.example.bluetoothextender.ui.home.HomeButtonsViewModel
 import com.example.bluetoothextender.ui.home.HomePage
 import java.io.IOException
 import java.util.UUID
@@ -68,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 BluetoothReceiver.DEVICE,
                 BluetoothDevice::class
             )
+            buttonsViewModel.enable()
             this@MainActivity.setupTransferThreads(supportedUUID, device)
         }
     }
@@ -123,13 +125,17 @@ class MainActivity : ComponentActivity() {
 
     private var previousDevice: BluetoothDevice? = null
 
+    private val buttonsViewModel = HomeButtonsViewModel()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge() // TODO("Make actually edge to edge visually")
         setContent {
-            HomePage( //TODO("implement buttons disable when in process")
+
+            HomePage(
                 action1 = this::chooseReadDevice,
-                action2 = this::chooseWriteDevice
+                action2 = this::chooseWriteDevice,
+                buttonsViewModel = buttonsViewModel
             )
         }
 
@@ -172,6 +178,7 @@ class MainActivity : ComponentActivity() {
 
                     RESULT_CANCELED -> {
                         Log.e(TAG, "Bluetooth device selection cancelled")
+                        buttonsViewModel.enable()
                     }
                 }
             }
@@ -435,6 +442,7 @@ class MainActivity : ComponentActivity() {
             Log.e(TAG, "Setup already in progress.")
             return false
         }
+        buttonsViewModel.disable()
         currentDeviceSetupType = deviceType
         return true
     }
@@ -473,6 +481,7 @@ class MainActivity : ComponentActivity() {
 
     private fun registerReceivers() {
         bluetoothSetupInProgress = true
+        buttonsViewModel.disable()
         registerReceiver(uuidReceiver, uuidIntentFilter, receiverFlags)
         registerReceiver(bluetoothReceiver, bluetoothIntentFilter)
         registerReceiver(a2dpConnectionStateChangeReceiver, a2dpConnectionIntentFilter)
@@ -485,6 +494,7 @@ class MainActivity : ComponentActivity() {
         unregisterReceiver(a2dpConnectionStateChangeReceiver)
         unregisterReceiver(a2dpPlayingStateChangeReceiver)
         bluetoothSetupInProgress = false
+        buttonsViewModel.enable()
     }
 
     private inner class BluetoothReader(val socket: BluetoothSocket, val handler: Handler) :
